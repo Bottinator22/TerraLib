@@ -265,6 +265,7 @@ function createNullHand(item, params, extraparams)
     -- just returns a hand object that simply stores an item and does nothing
     local hand = {}
     hand.item = item
+    local completeParams
     function hand:getMcontroller(m)
         return m
     end
@@ -289,8 +290,11 @@ function createNullHand(item, params, extraparams)
         return root.itemType(item.name or item)
     end
     function hand:getCompleteItemParameters()
-        local itemConfig = root.itemConfig(item)
-        return sb.jsonMerge(itemConfig.config, itemConfig.parameters)
+        if not completeParams then
+            local itemConfig = root.itemConfig(item)
+            completeParams = sb.jsonMerge(itemConfig.config, itemConfig.parameters)
+        end
+        return completeParams
     end
     function hand:update()
     end

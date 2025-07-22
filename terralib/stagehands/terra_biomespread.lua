@@ -1,6 +1,10 @@
 require "/scripts/vec2.lua"
 require "/scripts/poly.lua"
 
+-- todo: rework this ENTIRELY
+-- to possibly be a bit more... global
+-- (track biome spreading by the sector)
+
 local spreadTypes = {
     material={},
     mod={}
@@ -152,9 +156,12 @@ function update(dt)
                     local block = world[t.t](pos, t.l)
                     replacement = biome.spreadConversions[t.t][block]
                     if replacement then
+                        local tmod = world.mod(pos, t.l)
                         if t.t == "material" and world.replaceMaterials and world.replaceMaterials({pos},t.l,replacement) then
                             -- oSB handles this
-                            -- TODO: delete mods in this case
+                            if tmod and not biome.deleteMods then
+                                world.placeMod(pos, t.l, tmod, 0, true)
+                            end
                         else
                             if t.t == "mod" or world.damageTiles({pos}, t.l, v.pos, "blockish", 9999, 0) then
                                 local params = {pos=pos,type=t.t, typeName=replacement, layer=t.l, tries=0}

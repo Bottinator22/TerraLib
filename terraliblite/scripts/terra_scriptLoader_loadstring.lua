@@ -1,3 +1,4 @@
+scriptLoader = scriptLoader or {}
 function scriptLoader.loadMultiple_loadstring(scripts, tables, env, toTrack)
     if not env then
         env = {}
