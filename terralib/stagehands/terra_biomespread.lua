@@ -38,6 +38,12 @@ function update(dt)
         return
     end
     stagehand.setPosition(world.entityPosition(spawner))
+
+    -- Do nothing if there are no biomes defined
+    if #biomes == 0 then
+        return
+    end
+
     y = y + 1
     if y > 200 then
         y = -200
@@ -57,17 +63,45 @@ function update(dt)
     end
     queuedPlacement = nextQueuedPlacement
     local allblocks = {}
+
+    local ownPos = stagehand.position()
+    local ownPosX = ownPos[1]
+    local ownPosY = ownPos[2]
+    local world_material = world.material
+    local world_mod = world.mod
+    local table_find = table.find
+    local table_insert = table.insert
+    local spreadTypes_material = spreadTypes.material
+    local spreadTypes_mod = spreadTypes.mod
     for x=-200,200 do
-        local pos = vec2.add({x, y}, stagehand.position())
-        for k,t in next, things do
-            local m = world[t.t](pos, t.l)
-            if m then
-                if table.find(spreadTypes[t.t], m) then
-                    table.insert(allblocks, {type=t.t,typeName=m,pos=pos, layer=t.l})
-                end
+        local pos = {ownPosX + x, ownPosY + y}  -- Convert to absolute position
+        local m
+        m = world_material(pos, "foreground")
+        if m then
+            if table_find(spreadTypes_material, m) then
+                table_insert(allblocks, {type="material",typeName=m,pos=pos, layer="foreground"})
+            end
+        end
+        m = world_material(pos, "background")
+        if m then
+            if table_find(spreadTypes_material, m) then
+                table_insert(allblocks, {type="material",typeName=m,pos=pos, layer="background"})
+            end
+        end
+        m = world_mod(pos, "foreground")
+        if m then
+            if table_find(spreadTypes_mod, m) then
+                table_insert(allblocks, {type="mod",typeName=m,pos=pos, layer="foreground"})
+            end
+        end
+        m = world_mod(pos, "background")
+        if m then
+            if table_find(spreadTypes_mod, m) then
+                table_insert(allblocks, {type="mod",typeName=m,pos=pos, layer="background"})
             end
         end
     end
+
     for biomeName,biome in next, biomes do
         local blocks = {}
         for k,v in next, allblocks do
