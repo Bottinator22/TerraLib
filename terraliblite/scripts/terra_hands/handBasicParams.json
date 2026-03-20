@@ -18,6 +18,7 @@
       "liquidBuoyancy": 0.0
     },
     
+    "knockoutTime": 0,
     "initialScriptDelta": 1,
     "clientEntityMode": "clientMasterAllowed",
     "renderLayer": "Player+1",

@@ -33,16 +33,17 @@ function createActiveItemHand(item, params, extraparams)
         animationConfig = sb.jsonMerge(animationConfig, animationCustom)
         if animationConfig.animatedParts then
             for k,v in next, animationConfig.animatedParts.parts do
-                if v.properties then
-                    if not v.properties.anchorPart then
-                        if not v.properties.transformationGroups then
-                            v.properties.transformationGroups = {}
-                        end
-                        table.insert(v.properties.transformationGroups, "arm_weapon")
+                if not v.properties then
+                    v.properties = {}
+                end
+                if not v.properties.anchorPart then
+                    if not v.properties.transformationGroups then
+                        v.properties.transformationGroups = {}
                     end
-                    if v.properties.image and string.len(v.properties.image) > 0 and string.sub(v.properties.image,1,1) ~= "/" and string.sub(v.properties.image,1,1) ~= "<" then
-                        v.properties.image = (itemConfig.directory)..v.properties.image
-                    end
+                    table.insert(v.properties.transformationGroups, "arm_weapon")
+                end
+                if v.properties.image and string.len(v.properties.image) > 0 and string.sub(v.properties.image,1,1) ~= "/" and string.sub(v.properties.image,1,1) ~= "<" then
+                    v.properties.image = (itemConfig.directory)..v.properties.image
                 end
                 if v.partStates then
                     for k2,v2 in next, v.partStates do
@@ -52,6 +53,7 @@ function createActiveItemHand(item, params, extraparams)
                                     v3.properties.image = (itemConfig.directory)..v3.properties.image
                                 end
                                 if v3.properties.transformationGroups then
+                                    anyTransform = true
                                     table.insert(v3.properties.transformationGroups, "arm_weapon")
                                 end
                             end
@@ -102,7 +104,7 @@ function createActiveItemHand(item, params, extraparams)
     end
     handMcontrollerId = handMcontrollerId + 1
     local myMcontroller = buildSubMcontroller(mcontrollerToUse)
-    local mcname = string.format("mcontroller_%d",handMcontrollerId)
+    local mcname = string.format("tai_mcontroller_%d",handMcontrollerId)
     local cleanup = terra_proxy.setupReceiveMessages(mcname, myMcontroller.table)
     mParams.mcontrollerName = mcname
     hand.eid = world.spawnMonster("mechmultidrone", mcontroller.position(), mParams)
@@ -156,6 +158,9 @@ function createActiveItemHand(item, params, extraparams)
 end
 function createGenericHandWithScript(item, params, extraparams, script)
     -- uses item inventory icon for appearance
+    if params.mcontroller then
+        params.mcontroller = nil
+    end
     local hand = {}
     local itemConfig = root.itemConfig(item)
     local mergedConfig = sb.jsonMerge(itemConfig.config, itemConfig.parameters)

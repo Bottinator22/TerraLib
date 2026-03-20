@@ -1,4 +1,3 @@
-
 -- CaseInsensitiveTable: a table with case insensitive keys
 local citMT = {
     __index=function(t,k)

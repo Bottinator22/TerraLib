@@ -74,6 +74,13 @@ function mat3.transform(p,m)
         p[1]*m[4]+p[2]*m[5]+m[6]
     }
 end
+-- equivalent to mat3.transform with an input of {0,0}
+function mat3.translation(m)
+    return {
+        m[3],
+        m[6]
+    }
+end
 -- note: not a true matrix inversion
 -- https://nigeltao.github.io/blog/2021/inverting-3x2-affine-transformation-matrix.html
 function mat3.invert(m)
@@ -83,6 +90,10 @@ function mat3.invert(m)
         -m[4]/fdelta, m[1]/fdelta,((m[4]*m[3])-(m[1]*m[6]))/fdelta,
         0,0,1
     }
+end
+-- perfectly functional as long as there is no skew
+function mat3.angle(m)
+    return math.atan(m[4],m[1])
 end
 -- exports a mat3 to something for animator.transformTransformationGroup
 function mat3.export(i)

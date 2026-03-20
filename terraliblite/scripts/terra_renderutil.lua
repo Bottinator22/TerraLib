@@ -182,16 +182,16 @@ function renderutil.toVectorColour(c, includeAlpha)
     local out
     if alpha then
         out = {
-            (n & tonumber("ff000000",16)) >> 24,
-            (n & tonumber("00ff0000",16)) >> 16,
-            (n & tonumber("0000ff00",16)) >> 8,
-            (n & tonumber("000000ff",16))
+            (n & 0xff000000) >> 24,
+            (n & 0x00ff0000) >> 16,
+            (n & 0x0000ff00) >> 8,
+            (n & 0x000000ff)
         }
     else
         out = {
-            (n & tonumber("ff0000",16)) >> 16,
-            (n & tonumber("00ff00",16)) >> 8,
-            (n & tonumber("0000ff",16))
+            (n & 0xff0000) >> 16,
+            (n & 0x00ff00) >> 8,
+            (n & 0x0000ff)
         }
     end
     if #out == 3 and includeAlpha then

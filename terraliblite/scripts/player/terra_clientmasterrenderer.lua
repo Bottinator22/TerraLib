@@ -161,8 +161,8 @@ function update(dt)
     local newgenerics = {}
     for k,v in next, generics do
         if world.entityExists(v.entity) then
-        newgenerics[k] = v
-        updateContext(v)
+            newgenerics[k] = v
+            updateContext(v)
         end
     end
     generics = newgenerics

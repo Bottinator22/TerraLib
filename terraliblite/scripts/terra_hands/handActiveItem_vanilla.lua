@@ -3,13 +3,14 @@ require "/scripts/terra_vec2ref.lua"
 require "/scripts/terra_polyref.lua"
 require "/scripts/status.lua"
 require "/scripts/terra_proxy.lua"
-require "/scripts/terra_context.lua"
+require "/scripts/terra_scriptLoader.lua"
 
 ownerId = nil
 rootOwnerId = nil
 local dieTimer = 20
 doDie = false
 fireMode = "none"
+local scriptEnv = {}
 scriptTables = {activeItem={},script={},config={},item={},message={}}
 aimPosition = {0,0}
 local needTables = false
@@ -17,7 +18,6 @@ iisHeld = true
 itwoHandedGrip = false
 irecoil = false
 ioutsideHand = false
-local itemScriptEnv = {}
 local workVec21 = {0,0}
 local workVec22 = {0,0}
 local toTrack = {
@@ -34,6 +34,8 @@ damageSources = {}
 itemDamageSources = {}
 forceRegions = {}
 itemForceRegions = {}
+itemScriptDelta = 1
+local itemScriptTimer = 0
 local facing = 1
 local armLength = 0
 armPosition = nil
@@ -192,6 +194,10 @@ function init()
     end
     storage.item = storage.item or config.getParameter("item")
     storage.itemStorage = storage.itemStorage or itemParameters.scriptStorage or {}
+    itemScriptDelta = itemParameters.scriptDelta or 1
+    scriptTables.storage = storage.itemStorage
+    scriptTables.self = {} -- I don't use self table, so the item script having the original shouldn't be problematic
+    scriptTables.monsterstorage = storage
     if type(storage.item) == "string" then
         storage.item = {name=storage.item,count=1,parameters={}}
     end
@@ -233,9 +239,9 @@ function init()
   function scriptTables.config.getParameter(p,d)
     local out
     if p == "" then
-      out = sb.jsonMerge({}, itemParameters)
+      out = sb.jsonMerge({}, sd_originalEnv().itemParameters)
     else
-      out = itemParameters[p] or d
+      out = sd_originalEnv().itemParameters[p] or d
       if type(out) == "table" then
         return sb.jsonMerge({}, out)
       end
@@ -244,85 +250,99 @@ function init()
   end
   function scriptTables.message.setHandler(n,f)
     if f then
-      handlers[n] = f
+      handlers[n] = sd_originalEnv().itemScript.sd_wrap(f)
       setHandHandler(n,entity.id())
     else
       handlers[n] = nil
     end
   end
+  -- recreate script table
+  function scriptTables.script.setUpdateDelta(d)
+    sd_originalEnv().itemScriptDelta = d
+  end
+  function scriptTables.script.updateDt()
+    return sd_originalEnv().script.updateDt()
+  end
   -- recreate activeItem table
   function scriptTables.activeItem.ownerEntityId()
-    return rootOwnerId
+    return sd_originalEnv().rootOwnerId
   end
   function scriptTables.activeItem.ownerDamageTeam()
-    return world.entityDamageTeam(rootOwnerId)
+    return sd_originalEnv().world.entityDamageTeam(sd_originalEnv().rootOwnerId)
   end
   function scriptTables.activeItem.ownerAimPosition()
-    return aimPosition
+    return sd_originalEnv().aimPosition
   end
   function scriptTables.activeItem.fireMode()
-    return fireMode
+    return sd_originalEnv().fireMode
   end
   function scriptTables.activeItem.hand()
-    return whichHand
+    return sd_originalEnv().whichHand
   end
   function scriptTables.activeItem.handPosition(off)
+    local vec2 = sd_originalEnv().vec2
+    local world = sd_originalEnv().world
     if off then
-        return world.distance(vec2.add(vec2.mulToRef(vec2.rotateToRef(off, mcontroller.rotation(), workVec21), {scriptTables.mcontroller.facingDirection(), 1}, workVec22), mcontroller.position()),scriptTables.mcontroller.position())
+        return world.distance(vec2.add(vec2.mulToRef(vec2.rotateToRef(off, sd_originalEnv().mcontroller.rotation(), workVec21), {sd_originalEnv().scriptTables.mcontroller.facingDirection(), 1}, workVec22), sd_originalEnv().mcontroller.position()),sd_originalEnv().scriptTables.mcontroller.position())
     else
-        return world.distance(mcontroller.position(),scriptTables.mcontroller.position())
+        return world.distance(sd_originalEnv().mcontroller.position(),sd_originalEnv().scriptTables.mcontroller.position())
     end
   end
   function scriptTables.activeItem.aimAngleAndDirection(aimVertOffset, target)
-    local d = world.distance(target, armPosition)
-    local facing = canControlFacing and (d[1] > 0 and 1 or -1) or scriptTables.mcontroller.facingDirection() or 1
+    local vec2 = sd_originalEnv().vec2
+    local world = sd_originalEnv().world
+    local d = world.distance(target, sd_originalEnv().armPosition)
+    local facing = sd_originalEnv().canControlFacing and (d[1] > 0 and 1 or -1) or sd_originalEnv().scriptTables.mcontroller.facingDirection()
     d[1] = d[1] * facing
     return vec2.angle(d), facing
   end
   function scriptTables.activeItem.aimAngle(aimVertOffset, target)
-    local facing = scriptTables.mcontroller.facingDirection()
-    local d = world.distance(target, armPosition)
+    local vec2 = sd_originalEnv().vec2
+    local world = sd_originalEnv().world
+    local facing = sd_originalEnv().scriptTables.mcontroller.facingDirection()
+    local d = world.distance(target, sd_originalEnv().armPosition)
     --d[1] = d[1] * facing
     return vec2.angle(d)
   end
   function scriptTables.activeItem.setHoldingItem(h)
-    iisHeld = h
+    sd_originalEnv().iisHeld = h
   end
   function scriptTables.activeItem.setBackArmFrame(f)
     if f and string.find(f,"?") then
       f = string.sub(f,0,string.find(f,"?")-1)
     end
-    ibackArmFrame = f or "rotation"
+    sd_originalEnv().ibackArmFrame = f or "rotation"
   end
   function scriptTables.activeItem.setFrontArmFrame(f)
     if f and string.find(f,"?") then
       f = string.sub(f,0,string.find(f,"?")-1)
     end
-    ifrontArmFrame = f or "rotation"
+    sd_originalEnv().ifrontArmFrame = f or "rotation"
   end
   function scriptTables.activeItem.setTwoHandedGrip(t)
-    itwoHandedGrip = t
+    sd_originalEnv().itwoHandedGrip = t
   end
   function scriptTables.activeItem.setRecoil(b)
-    irecoil = b
+    sd_originalEnv().irecoil = b
   end
   function scriptTables.activeItem.setOutsideOfHand(b)
-    ioutsideHand = b
+    sd_originalEnv().ioutsideHand = b
   end
   function scriptTables.activeItem.setArmAngle(a)
-    mcontroller.setRotation(a)
+    sd_originalEnv().mcontroller.setRotation(a)
   end
   function scriptTables.activeItem.setFacingDirection(f)
+    local world = sd_originalEnv().world
     --mcontroller.controlFace(f)
-    if world.entityType(ownerId) == "monster" then
-      world.callScriptedEntity(ownerId, "setFacing", f)
+    if world.entityType(sd_originalEnv().ownerId) == "monster" then
+      world.callScriptedEntity(sd_originalEnv().ownerId, "setFacing", f)
     end
   end
   function scriptTables.activeItem.setDamageSources(d)
-    damageSources = d or {}
+    sd_originalEnv().damageSources = d or {}
   end
   function scriptTables.activeItem.setItemDamageSources(d)
-    itemDamageSources = d or {}
+    sd_originalEnv().itemDamageSources = d or {}
   end
   function scriptTables.activeItem.setShieldPolys(p)
     -- not possible currently
@@ -331,10 +351,10 @@ function init()
     -- not possible currently
   end
   function scriptTables.activeItem.setForceRegions(f)
-    forceRegions = f or {}
+    sd_originalEnv().forceRegions = f or {}
   end
   function scriptTables.activeItem.setItemForceRegions(f)
-    itemForceRegions = f or {}
+    sd_originalEnv().itemForceRegions = f or {}
   end
   function scriptTables.activeItem.setCursor(c)
     -- not possible currently
@@ -342,7 +362,7 @@ function init()
   function scriptTables.activeItem.setScriptedAnimationParameter(p,v)
     if captureAnimationParameters then
       if v == nil then
-        animParams[p] = deleteVal
+        animParams[p] = sd_originalEnv().deleteVal
       else
         animParams[p] = v
       end
@@ -351,15 +371,15 @@ function init()
     end
   end
   function scriptTables.activeItem.setInventoryIcon(i)
-    storage.item.parameters.inventoryIcon = i
-    itemParameters = sb.jsonMerge(itemConfig.config, storage.item.parameters)
+    monsterstorage.item.parameters.inventoryIcon = i
+    sd_originalEnv().itemParameters = sb.jsonMerge(itemConfig.config, monsterstorage.item.parameters)
   end
   function scriptTables.activeItem.setInstanceValue(p,v)
-    storage.item.parameters[p] = v
-    itemParameters = sb.jsonMerge(itemConfig.config, storage.item.parameters)
+    monsterstorage.item.parameters[p] = v
+    sd_originalEnv().itemParameters = sb.jsonMerge(itemConfig.config, monsterstorage.item.parameters)
   end
   function scriptTables.activeItem.callOtherHandScript(func,...)
-    local world = world
+    local world = sd_originalEnv().world
     if otherHand and world.entityExists(otherHand) then
         return world.callScriptedEntity(otherHand, "callItemScript", func, ...)
     end
@@ -383,17 +403,17 @@ function init()
     return scriptTables.status.stat("powerMultiplier")
   end
   function scriptTables.activeItem.ownerTeam()
-    local world = world
+    local world = sd_originalEnv().world
     return world.entityDamageTeam(rootOwnerId)
   end
   function scriptTables.item.name()
-    return storage.item.name
+    return monsterstorage.item.name
   end
   function scriptTables.item.count()
-    return storage.item.count or 1
+    return monsterstorage.item.count or 1
   end
   function scriptTables.item.setCount(c)
-    storage.item.count = c
+    monsterstorage.item.count = c
   end
   function scriptTables.item.maxStack()
     return scriptTables.config.getParameter("maxStack",defaults.defaultMaxStack)
@@ -401,29 +421,29 @@ function init()
   --item.is and item.matchingDescriptor don't even exist in the source code?
   -- wiki outdated again... I just keep using it out of convenience, but it's very outdated
   function scriptTables.item.matches(other, exact)
-    if storage.item.name == (other.name or other) then
+    if monsterstorage.item.name == (other.name or other) then
       if exact then
         if not other.name then
-          for k,v in next, storage.item.parameters do
+          for k,v in next, monsterstorage.item.parameters do
             return false
           end
           return true
         end
-        return equals(storage.item.parameters, other.parameters)
+        return equals(monsterstorage.item.parameters, other.parameters)
       else
         return true
       end
     end
   end
   function scriptTables.item.consume(c)
-    storage.item.count = storage.item.count - (c or 1)
-    return storage.item.count >= 0
+    monsterstorage.item.count = monsterstorage.item.count - (c or 1)
+    return monsterstorage.item.count >= 0
   end
   function scriptTables.item.empty()
-    return storage.item.count == 0
+    return monsterstorage.item.count == 0
   end
   function scriptTables.item.descriptor()
-    return storage.item
+    return monsterstorage.item
   end
   function scriptTables.item.description()
     return scriptTables.config.getParameter("description")
@@ -499,7 +519,7 @@ function init()
       end
       table.insert(scripts, v)
     end
-    itemScript = buildContext({scripts=scripts,scriptDelta=itemParameters.scriptDelta or 1}, scriptTables, storage.itemStorage, toTrack, {env=itemScriptEnv})
+    itemScript = scriptLoader.loadMultiple(scripts, scriptTables, scriptEnv, toTrack)
     if itemScript.init then
       itemScript.init()
     end
@@ -508,11 +528,7 @@ end
 function setPosition(p, upd)
     armPosition = p
     if upd then
-      local facing = 1
-      if needTables then
-      else
-        facing = scriptTables.mcontroller.facingDirection()
-      end
+      local facing = scriptTables.mcontroller.facingDirection()
       mcontroller.setPosition(vec2.add(armPosition, vec2.addToRef(vec2.mulToRef(vec2.withAngle(mcontroller.rotation(),armLength), {facing, 1}, workVec21), {irecoil and (facing*-0.125) or 0, 0}, workVec21)))
     end
 end
@@ -523,8 +539,8 @@ function callItemScript(func, ...)
     if needTables then
         return
     end
-    if itemScriptEnv[func] then
-      return itemScriptEnv[func](...)
+    if itemScript[func] then
+      return itemScript[func](...)
     end
 end
 function isHeld()
@@ -553,7 +569,7 @@ function setTables()
       end
       table.insert(scripts, v)
     end
-    itemScript = buildContext({scripts=scripts,scriptDelta=itemParameters.scriptDelta or 1}, scriptTables, storage.itemStorage, toTrack, {env=itemScriptEnv})
+    itemScript = scriptLoader.loadMultiple(scripts, scriptTables, scriptEnv, toTrack)
     if itemScript.init then
       itemScript.init()
     end
@@ -578,8 +594,12 @@ function update(dt)
   end
   animator.resetTransformationGroup("arm_weapon")
   local facing = scriptTables.mcontroller.facingDirection()
-  if itemScript.update then
-    itemScript.update(dt, fireMode, isShiftHeld, moves)
+  itemScriptTimer = itemScriptTimer + 1
+  if itemScriptDelta > 0 and itemScriptTimer >= itemScriptDelta then
+    itemScriptTimer = 0
+    if itemScript.update then
+      itemScript.update(dt*itemScriptDelta, fireMode, isShiftHeld, moves)
+    end
   end
   mcontroller.setPosition(vec2.add(armPosition, vec2.addToRef(vec2.mulToRef(vec2.withAngle(mcontroller.rotation(),armLength), {facing, 1}, workVec21), {irecoil and (facing*-0.125) or 0, 0}, workVec21)))
   if captureAnimationParameters then

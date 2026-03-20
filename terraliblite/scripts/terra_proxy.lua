@@ -1,6 +1,8 @@
 -- Allows easily sharing tables locally without the use of metatables.
 -- Target entities must be local (same master).
 -- Entity messages are immediately resolved when created for local entities.
+
+-- TODO: clean this up. keys are transferred, which kinda defeats the point of the whole metatable thing on proxies.
 terra_proxy = {}
 local cleanupRequests = {}
 -- senders
@@ -8,11 +10,29 @@ local cleanupRequests = {}
 -- sets up the proxy for messages
 local function iterateMessages(name,t,f,msgs)
     -- does this table extend something? if so, setup handlers for its index as well
+    local keys = {}
     local mt = getmetatable(t)
-    if mt and type(mt.__index) == "table" then
-        iterateMessages(name,mt.__index,f,msgs)
+    if mt and mt.__index then
+        if type(mt.__index) == "table" then
+            keys = iterateMessages(name,mt.__index,f,msgs)
+        elseif mt.terra_keys then
+            for _,k in next, mt.terra_keys do
+                local v = t[k]
+                if type(v) == "function" then
+                    local msg = string.format(f,k)
+                    message.setHandler(msg,function(_,isLocal,...)
+                        if not isLocal then return end
+                        return v(...)
+                    end)
+                    table.insert(msgs,msg)
+                end
+            end
+        else
+            sb.logWarn(string.format("Iterating through messages for proxy %s: Table __index is a function, and no keys are specified!",name))
+        end
     end
     for k,v in next, t do
+        table.insert(keys,k)
         if type(v) == "function" then
             local msg = string.format(f,k)
             message.setHandler(msg,function(_,isLocal,...)
@@ -22,6 +42,7 @@ local function iterateMessages(name,t,f,msgs)
             table.insert(msgs,msg)
         end
     end
+    return keys
 end
 local function doCleanup()
     local newCleanupRequests = {}
@@ -37,7 +58,8 @@ end
 function terra_proxy.setupReceiveMessages(name,t)
     doCleanup()
     local f = string.format("%s.%%s",name)
-    local msgs = {string.format(f,"terra_proxy_mode"),string.format(f,"terra_proxy_msgs")}
+    local msgs = {string.format(f,"terra_proxy_mode"),string.format(f,"terra_proxy_msgs"),string.format(f,"terra_proxy_keys")}
+    local keys
     message.setHandler(msgs[1],function(_,isLocal,...)
         if not isLocal then return end
         return "messages"
@@ -46,7 +68,11 @@ function terra_proxy.setupReceiveMessages(name,t)
         if not isLocal then return end
         return msgs
     end)
-    iterateMessages(name,t,f,msgs)
+    message.setHandler(msgs[3],function(_,isLocal,...)
+        if not isLocal then return end
+        return keys
+    end)
+    keys = iterateMessages(name,t,f,msgs)
     local function actuallyCleanup()
         -- clean up it all
         for k,v in next, msgs do
@@ -111,11 +137,17 @@ function terra_proxy.setupProxy(name,entityId,throw)
             end
         end
     end
+    local keys = world.sendEntityMessage(entityId,string.format(fmt,"terra_proxy_keys")):result()
     setmetatable(proxy,{__index=function(t,k)
         local func = builder(string.format(fmt,k))
         t[k] = func
         return func
-    end})
+    end,terra_keys=keys})
+    -- actually, define all existent keys for iteration
+    local n
+    for _,k in next, keys do
+        n = proxy[k]
+    end
     return proxy
 end
 

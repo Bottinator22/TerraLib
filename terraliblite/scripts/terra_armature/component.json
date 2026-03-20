@@ -1,0 +1,57 @@
+{
+    "metaBoundBox" : [-50, -50, 50, 50],
+    
+    "movementSettings" : {
+      "collisionEnabled": false,
+      "collisionPoly" : [ [0,0] ],
+
+      "mass" : 2.0,
+      "walkSpeed" : 35,
+      "runSpeed" : 35,
+
+      "bounceFactor" : 0,
+      "groundFriction" : 10,
+      "gravityEnabled" : false,
+
+      "airFriction" : 0,
+      "liquidFriction": 0,
+      "liquidBuoyancy": 0.0
+    },
+    
+    "initialScriptDelta": 1,
+    "clientEntityMode": "clientMasterAllowed",
+    "level": 1,
+    
+    "bodyMaterialKind" : "robotic",
+    
+    "stunDamageSuppression" : 0.2,
+    "knockoutTime": 0,
+    
+    "scripts": [
+      "/scripts/terra_armature/component.lua"
+    ],
+
+    "statusSettings" : {
+      "statusProperties" : {
+        "targetMaterialKind" : "robotic"
+      },
+
+      "appliesEnvironmentStatusEffects" : false,
+      "appliesWeatherStatusEffects" : false,
+      "minimumLiquidStatusEffectPercentage" : 0.1,
+
+      "primaryScriptSources" : [
+      "/scripts/terra_armature/component_primary.lua"
+      ],
+      "primaryScriptDelta" : 1,
+
+      "stats" : {
+        "statusImmunity": {
+          "baseValue":1.0
+        }
+      },
+
+      "resources" : {
+      }
+    }
+} 

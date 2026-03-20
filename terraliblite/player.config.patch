@@ -1,5 +1,4 @@
 [
 { "op" : "add", "path" : "/genericScriptContexts/terraMusic", "value" : "/scripts/player/terra_music.lua" },
-{ "op" : "add", "path" : "/genericScriptContexts/terraStructurePreloader", "value" : "/scripts/player/terra_structurePreloader.lua" },
 { "op" : "add", "path" : "/deploymentConfig/scripts/-", "value" : "/scripts/player/terra_clientmasterrenderer.lua" }
 ]

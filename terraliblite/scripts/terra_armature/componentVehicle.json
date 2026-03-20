@@ -1,0 +1,21 @@
+{
+    "animation" : "/monsters/mechdrone/multidrone/mechmultidrone.animation",
+    
+    "boundBox" : [-256, -256, 256, 256],
+    
+    "physicsCollisions": {
+      "platform":{
+        "collision": [
+          [1,1],[1,-1],[-1,-1],[-1,1]
+        ],
+        "collisionKind": "slippery",
+        "attachToPart": "body",
+        "enabled": false
+      }
+    },
+    
+    "clientEntityMode": "clientMasterAllowed",
+    
+    "script":"/scripts/terra_armature/componentVehicle.lua",
+    "scriptDelta": 1
+} 

@@ -1,20 +1,13 @@
 require "/scripts/rect.lua"
 local lastUsed
 local region
-local poly
 function init()
     lastUsed = os.clock()
-    vehicle.setInteractive(false)
-    mcontroller.applyParameters(config.getParameter("movementSettings"))
-    region = rect.translate(config.getParameter("boundBox"),mcontroller.position())
-    poly = {
-        {region[1],region[2]},{region[1],region[4]},{region[3],region[4]},{region[3],region[2]}
-    }
+    region = rect.translate(config.getParameter("broadcastArea"),entity.position())
 end
 function update(dt)
-    world.debugPoly(poly,"red")
     if os.clock()-lastUsed > 1 then
-        vehicle.destroy()
+        stagehand.die()
         return
     end
 end
@@ -24,7 +17,4 @@ function sd_isLoaderOf(r)
         lastUsed = os.clock()
     end
     return valid
-end
-function applyDamage(damageRequest)
-    return {}
 end
