@@ -58,7 +58,7 @@ function stanceInterpolated(stancea,stanceb,i,ref)
             scaleb = {stb.scale,stb.scale}
         end
         
-        local scale = vec2.add(vec2.mul(scalea or {0,0},i),vec2.mul(scaleb or {0,0},ii))
+        local scale = vec2.add(vec2.mul(scalea,i),vec2.mul(scaleb,ii))
         local rot = (sta.rotation or 0)*i + (stb.rotation or 0)*ii
         local offset = vec2.add(vec2.mul(sta.offset or {0,0},i),vec2.mul(stb.offset or {0,0},ii))
         

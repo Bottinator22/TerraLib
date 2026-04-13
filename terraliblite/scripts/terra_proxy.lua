@@ -3,6 +3,8 @@
 -- Entity messages are immediately resolved when created for local entities.
 
 -- TODO: clean this up. keys are transferred, which kinda defeats the point of the whole metatable thing on proxies.
+
+-- TODO: fix pcall with proxies. if an error is thrown it will error the proxy, not the calling script.
 terra_proxy = {}
 local cleanupRequests = {}
 -- senders
