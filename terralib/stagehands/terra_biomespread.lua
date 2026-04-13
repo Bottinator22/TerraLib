@@ -35,6 +35,10 @@ function init()
         end
     end
     spawner = config.getParameter("spawner")
+    
+    message.setHandler("terra_isTerraLib",function(_,l)
+        return true
+    end)
 end
 function update(dt)
     if not world.entityExists(spawner) then
