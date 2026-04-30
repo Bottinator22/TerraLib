@@ -27,7 +27,7 @@ local function equals(o1, o2, ignore_mt)
     end
     return true
 end
-local function table.find(org, findValue)
+local function tfind(org, findValue)
     for key,value in pairs(org) do
         if value == findValue then
             return key
@@ -36,17 +36,25 @@ local function table.find(org, findValue)
     return nil
 end
 function inventorySlots.swapItem(name)
+    -- TODO: make this better
     local neededTag = nil
+    local neededType = nil
     if widget.getData(name) then
         neededTag = widget.getData(name).needTag
+        neededType = widget.getData(name).needType
     end
     local origItem = widget.itemSlotItem(name)
     local swapItem = player.swapSlotItem()
-    local finish = not neededTag
+    local finish = not neededTag and not neededType
     if not swapItem then
         finish = true
+    elseif neededType then
+        if root.itemType(swapItem.name) == neededType then
+            finish = true
+        end
     elseif neededTag then
-        local tags = root.itemConfig(swapItem.name).config.itemTags
+        local cfg = root.itemConfig(swapItem.name).config
+        local tags = cfg.itemTags
         if tags then
             for k,v in next, tags do
                 if v == neededTag then
@@ -68,6 +76,7 @@ function inventorySlots.swapItem(name)
     end
     player.setSwapSlotItem(origItem)
     widget.setItemSlotItem(name, swapItem)
+    if itemUpdate then itemUpdate() end
 end
 function inventorySlots.swapItemRight(name) 
     local origItem = widget.itemSlotItem(name)
@@ -88,6 +97,7 @@ function inventorySlots.swapItemRight(name)
             
             -- define item for the augment
             -- why would you want to use all of these in an augment?
+            -- TODO: switch to better sandbox on oSB
             local itemTable = {}
             function itemTable.name()
                 return swapItem.name
@@ -127,7 +137,7 @@ function inventorySlots.swapItemRight(name)
                 return itemConfig.getParameter("shortdescription","")
             end
             function itemTable.rarity()
-                return table.find({"common","uncommon","rare","legendary","essential"},itemConfig.getParameter("rarity","common"))-1
+                return tfind({"common","uncommon","rare","legendary","essential"},itemConfig.getParameter("rarity","common"))-1
             end
             function itemTable.rarityString()
                 return itemConfig.getParameter("rarity","common")
@@ -163,13 +173,13 @@ function inventorySlots.swapItemRight(name)
                 return itemConfig.getParameter("timeToLive",300.0)
             end
             function itemTable.hasItemTag(tag)
-                return table.find(itemConfig.getParameter("tags",{}), tag) ~= nil
+                return tfind(itemConfig.getParameter("tags",{}), tag) ~= nil
             end
             function itemTable.pickupQuestTemplates()
                 return {}
             end
             
-            local funcs =  = scriptLoader.loadMultiple(scripts, {config=itemConfig,item=itemTable}, {}, {"apply"})
+            local funcs = scriptLoader.loadMultiple(scripts, {config=itemConfig,item=itemTable}, {}, {"apply"})
             if funcs.apply then
                 local output, i = funcs.apply(origItem)
                 if i == nil then
@@ -184,6 +194,7 @@ function inventorySlots.swapItemRight(name)
                         player.setSwapSlotItem(nil)
                     end
                     origItem = nil
+                    if itemUpdate then itemUpdate() end
                 end
             end
         end
@@ -209,5 +220,6 @@ function inventorySlots.swapItemRight(name)
             origItem = nil
         end
         widget.setItemSlotItem(name, origItem)
+        if itemUpdate then itemUpdate() end
     end
 end

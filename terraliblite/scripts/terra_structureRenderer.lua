@@ -1,5 +1,6 @@
 require "/scripts/vec2.lua"
 
+local zeroVec = {0,0}
 structureRenderer = {}
 local structureObj = {}
 local configCache = {}
@@ -40,7 +41,7 @@ local function cachedMatId(t)
             -- make a proper metamaterial id list later
             matIdCache[t] = 65526
         else
-            matIdCache[t] = cfg.materialId
+            matIdCache[t] = cfg.config.materialId
         end
     end
     return matIdCache[t]
@@ -76,6 +77,7 @@ function structureRenderer.createStructure(params)
         obj.background = {}
     end
     setmetatable(obj,structureMT)
+    return obj
 end
 -- sets the metatable and returns
 -- if existing structure provided, uses its checksum
@@ -96,7 +98,7 @@ function structureRenderer.fromStored(obj,existing)
     end
     return existing
 end
-local checksumMax = 2^32
+local checksumMax = 2^31
 local function checksumStr(str)
     local h = 0
     for c in string.gmatch(str,".") do
@@ -104,6 +106,7 @@ local function checksumStr(str)
     end
     return h
 end
+-- TODO: use a proper hash function
 function structureObj.generateChecksum(structure)
     local checksum = structure.seed
     if structure.background then
@@ -112,16 +115,16 @@ function structureObj.generateChecksum(structure)
     if structure.linkToWorld then
         checksum = checksum * 3
     end
-    checksum = (checksum + structure.pos[1])
+    checksum = (checksum + structure.pos[1]) % checksumMax
     checksum = (checksum + structure.pos[2]) % checksumMax
     checksum = (checksum + checksumStr(structure.directives)) % checksumMax
     if structure.background then
         for k,v in next, structure.background do
-            checksum = ((checksum * cachedMatId(v.block)) % checksumMax + v.pos[1] + v.pos[2]) % checksumMax -- position values are expected to be integers!
+            checksum = ((checksum + (cachedMatId(v.block) << 4)) % checksumMax + v.pos[1] + v.pos[2]) % checksumMax -- position values are expected to be integers!
         end
     end
     for k,v in next, structure.foreground do
-        checksum = ((checksum * cachedMatId(v.block)) % checksumMax + v.pos[1] + v.pos[2]) % checksumMax -- position values are expected to be integers!
+        checksum = ((checksum + (cachedMatId(v.block) << 4)) % checksumMax + v.pos[1] + v.pos[2]) % checksumMax -- position values are expected to be integers!
     end
     structure.checksum = checksum
     return checksum
@@ -158,6 +161,42 @@ function structureObj.anyTiles(structure)
     end
     return false
 end
+function structureObj.calcBoundBox(structure,center,tilesPerResume)
+    -- expensive. do rarely.
+    if not structureObj.anyTiles(structure) then
+        return nil
+    end
+    tilesPerResume = tilesPerResume or 3000
+    return coroutine.create(function()
+        local bb = {math.huge,math.huge,-math.huge,-math.huge}
+        if center then
+            bb = {center[1],center[2],center[1],center[2]}
+        end
+        local iterating = structure.background or structure.foreground
+        local onFG = not structure.background
+        local k,v = next(iterating)
+        while k do
+            for i=1,tilesPerResume do
+                bb[1] = math.min(bb[1],v.pos[1])
+                bb[2] = math.min(bb[2],v.pos[2])
+                bb[3] = math.max(bb[3],v.pos[1]+1)
+                bb[4] = math.max(bb[4],v.pos[2]+1)
+                
+                k,v = next(iterating,k)
+                if not k then
+                    if onFG then
+                        break
+                    else
+                        iterating = structure.foreground
+                        k,v = next(iterating)
+                    end
+                end
+            end
+            coroutine.yield()
+        end
+        return bb
+    end)
+end
 function structureObj.prepare(structure)
     math.randomseed(structure.seed)
     local parts = {}
@@ -180,6 +219,7 @@ function structureObj.prepare(structure)
     if structure.checksum then
         structure:generateChecksum()
     end
+    structure.dirtyTiles = false
     return structure
 end
 local function getTemplate(mat)
@@ -198,7 +238,7 @@ local matchFuncs = {
         return not t
     end,
     Connects = function(entry,block,t,h)
-        return t and not nonConnectableMaterials[t]
+        return not not (t and not nonConnectableMaterials[t])
     end,
     Shadows = function(entry,block,t,h)
         if not t then
@@ -240,13 +280,28 @@ function structureObj.prepareBlock(structure, block, background, blocks)
     local rules = template.rules
     local output = {}
     local matchMap = {}
-    function processMatch(m)
-        if m.matchAllPoints then
+    function checkMatch(m)
+        if m.requiredLayer then
+            if (m.requiredLayer == "background") ~= background then
+                return
+            end
+        end
+        local matchList = m.matchAllPoints
+        local matchAll = false
+        if not m.matchAnyPoints then
+            matchAll = true
+        else
+            matchList = m.matchAnyPoints
+        end
+        local matchValid = matchAll
+        if matchList then
             for k,v in next, m.matchAllPoints do
                 local rule = rules[v[2]]
+                local ruleValid = matchAll
                 for k,e in next, rule.entries do
+                    local valid = true
                     local matchFrom = blocks
-                    local matchNot = false
+                    local matchInv = not not e.inverse
                     local noMatch = false
                     local matLayer = "foreground"
                     if background then
@@ -257,32 +312,47 @@ function structureObj.prepareBlock(structure, block, background, blocks)
                             noMatch = true
                         else
                             matLayer = "foreground"
+                            matchFrom = structure.foreground
                         end
                     end
                     if noMatch then -- only present for shadows so
-                        if not e.inverse then
-                            return
-                        end
+                        valid = false
                     else
                         local tile = matchFrom[blockKey(block.pos[1]+v[1][1],block.pos[2]+v[1][2])]
                         if structure.linkToWorld and not tile then
-                            local worldPos = vec2.add(structure.pos,block.pos)
-                            if matchFuncs[e.type](e,block,world.material(worldPos,matLayer),world.materialHueShift(worldPos,matLayer)) ~= e.inverse then
-                                return
-                            end
+                            local worldPos = vec2.add(structure.pos,{block.pos[1]+v[1][1],block.pos[2]+v[1][2]})
+                            valid = matchFuncs[e.type](e,block,world.material(worldPos,matLayer),world.materialHueShift(worldPos,matLayer))
                         elseif tile then
-                            if matchFuncs[e.type](e,block,tile.block,tile.hueshift) ~= e.inverse then
-                                return
-                            end
+                            valid = matchFuncs[e.type](e,block,tile.block,tile.hueshift)
                         else
-                            if matchFuncs[e.type](e,block,nil,nil) ~= e.inverse then
-                                return
-                            end
+                            valid = matchFuncs[e.type](e,block,nil,nil)
                         end
                     end
+                    if matchInv then
+                        valid = not valid
+                    end
+                    if matchAll then
+                        ruleValid = valid and ruleValid
+                        if not ruleValid then
+                            return
+                        end
+                    else
+                        ruleValid = valid or ruleValid
+                    end
+                end
+                if matchAll then
+                    matchValid = ruleValid and matchValid
+                    if not matchValid then
+                        return
+                    end
+                else
+                    matchValid = ruleValid or matchValid
                 end
             end
         end
+        return matchValid
+    end
+    function processMatch(m)
         if m.pieces then
             for k,v in next, m.pieces do
                 local piece = template.pieces[v[1]]
@@ -291,9 +361,9 @@ function structureObj.prepareBlock(structure, block, background, blocks)
                 local texturePos = piece.texturePosition
                 if params.variants then
                     local variant = math.random(0,params.variants-1)
-                    texturePos = vec2.add(texturePos, vec2.mul(piece.variantStride, variant))
+                    texturePos = vec2.add(texturePos, vec2.mul(piece.variantStride or zeroVec, variant))
                 end
-                local texture = (piece.texture or block.block.path:match("(.*/)")..params.texture)
+                local texture = (piece.texture or blockcfg.path:match("(.*/)")..params.texture)
                 local imageSize = cachedImageSize(texture)
                 newPart.image = string.format(
                     "%s?crop=%d;%d;%d;%d",
@@ -304,7 +374,7 @@ function structureObj.prepareBlock(structure, block, background, blocks)
                     imageSize[2]-texturePos[2]
                 )
                 if block.hueshift then
-                    newPart.image = string.format("%s%.5f",newPart.image,block.hueshift)
+                    newPart.image = string.format("%s?hueshift=%.5f",newPart.image,block.hueshift)
                 end
                 local zLevel = params.zLevel
                 local layer
@@ -330,24 +400,52 @@ function structureObj.prepareBlock(structure, block, background, blocks)
                 table.insert(output, newPart)
             end
         end
+        local smr = false
         if m.subMatches then
             if type(m.subMatches) == "string" then
                 for k,v in next, matchMap[m.subMatches] do
-                    processMatch(v)
+                    if checkMatch(v) then
+                        smr = true
+                        local o = processMatch(v)
+                        if o and v.haltOnSubMatch then
+                            break
+                        end
+                        if v.haltOnMatch then
+                            break
+                        end
+                    end
                 end
             else
                 for k,v in next, m.subMatches do
-                    processMatch(v)
+                    if checkMatch(v) then
+                        smr = true
+                        local o = processMatch(v)
+                        if o and v.haltOnSubMatch then
+                            break
+                        end
+                        if v.haltOnMatch then
+                            break
+                        end
+                    end
                 end
             end
         end
+        return smr
     end
     for _,v in next, template.matches do
         -- it's already json data, why did they make these an array of pairs instead of an object...
         matchMap[v[1]] = v[2]
     end
     for k,m in next, matchMap.main do
-        processMatch(m)
+        if checkMatch(m) then
+            local o = processMatch(m)
+            if o and m.haltOnSubMatch then
+                break
+            end
+            if m.haltOnMatch then
+                break
+            end
+        end
     end
     return output
 end
@@ -386,7 +484,7 @@ function structureObj.prepareStatic(structure)
 end
 -- can be run every frame, should be faster than renderStructure especially for non-moving stuff
 function structureObj.renderStatic(structure)
-    if not structure.drawables or not vec2.eq(structure.lastPosition, structure.pos) or structure.directives ~= structure.lastDirectives then
+    if structure.dirtyTiles or not structure.drawables or not vec2.eq(structure.lastPosition, structure.pos) or structure.directives ~= structure.lastDirectives then
         structure:prepareStatic()
     end
     for k,v in next, structure.drawables do
