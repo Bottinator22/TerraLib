@@ -89,17 +89,17 @@ function stanceAnimator.setAnimation(self,a,f)
             else
                 self.currentAnimation = animationsConfig[a]
             end
+            if self.currentAnimation.sounds and self.sounds then
+                playAnimationSound(self.currentAnimation.sounds[1])
+            end
+            if self.currentAnimation.animStates then
+                local s = self.currentAnimation.animStates[1]
+                if s then
+                    animator.setAnimationState(s[1],s[2])
+                end
+            end
         else
             self.currentAnimation = nil
-        end
-        if self.currentAnimation.sounds and self.sounds then
-            playAnimationSound(self.currentAnimation.sounds[1])
-        end
-        if self.currentAnimation.animStates then
-            local s = self.currentAnimation.animStates[1]
-            if s then
-                animator.setAnimationState(s[1],s[2])
-            end
         end
     else
         self.currentAnimation = animationsConfig[a]

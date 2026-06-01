@@ -4,10 +4,11 @@ require "/scripts/terra_proxy.lua"
 require "/scripts/terra_inversekinematics.lua"
 
 local workVec21 = {0,0}
-local armatureConfig
+armatureConfig = nil
 local componentConfig
 bones = {}
-local rootBones = {}
+dummyBones = {}
+rootBones = {}
 components = {}
 facing = 1
 
@@ -22,6 +23,21 @@ transformedBoneCenter = transformedCenter
 function armature_boneExtraInit(bone,cfg) end
 function armature_boneExtraPostInit(bone) end
 function armature_boneExtraApply(bone) end
+
+local dummyBoneIgnoredKeys = {
+    name=true,
+    dummyKeys=true,
+    appliedTransform=true,
+    transform=true
+}
+-- special bones used to apply a config to other bones
+function applyDummyBone(dummyBone,bone)
+    for k,v in next, dummyBone do
+        if not dummyBoneIgnoredKeys[k] and not dummyBone.dummyKeys[k] then
+            bone[k] = v
+        end
+    end
+end
 
 function initArmature()
     armatureConfig = config.getParameter("armature")
@@ -76,6 +92,18 @@ function initArmature()
         components[k] = c
     end
     for k,v in next, armatureConfig do
+        local dummyKeys
+        if v.dummy then
+            -- don't copy default values
+            dummyKeys = {
+                baseTransform = not (v.rotation or v.scale or v.position),
+                defaultTransform = true,
+                animator = not v.component and not v.noComponent,
+                center = not v.center,
+                debugColour = not v.debugColour,
+                transformGroup = not v.transformGroup
+            }
+        end
         local b = {
             name=k,
             parentName=v.parent,
@@ -87,6 +115,7 @@ function initArmature()
             debugColour=v.debugColour or "white",
             transformGroup=v.transformGroup,
             animator=animator,
+            dummyKeys=dummyKeys,
             ikData=nil,
             ikTarget=nil,
             children={}
@@ -105,7 +134,8 @@ function initArmature()
         end
         if v.calculateIK then
             b.ikData = {
-                useAltSolution=v.useAltIKSolution
+                useAltSolution=v.useAltIKSolution,
+                ikCenter=v.ikCenter
             }
         end
         armature_boneExtraInit(b,v)
@@ -132,7 +162,7 @@ function initArmature()
             
             local midPos = transformedCenter(mid)
             local basePos = transformedCenter(base)
-            local endPos = transformedCenter(v)
+            local endPos = mat3.transform(ikData.ikCenter or v.center,v.appliedTransform)
             local baseToMidDis = vec2.sub(midPos,basePos)
             local midToEndDis = vec2.sub(endPos,midPos)
             
@@ -142,6 +172,17 @@ function initArmature()
             ikData.secondLength = vec2.mag(midToEndDis)
             ikData.secondAngleOffset = vec2.angle(midToEndDis)-ikData.firstAngleOffset
         end
+    end
+    for k,v in next, bones do
+        if v.dummyKeys then
+            if #v.children == 0 then
+                v.dummyKeys.children = true
+            end
+            dummyBones[k] = v
+        end
+    end
+    for k,v in next, dummyBones do
+        bones[k] = nil
     end
 end
 
@@ -163,6 +204,9 @@ relativePos = relative
 
 local rootTransform
 function applyBone(bone)
+    if bone.inactive or bone.dummyKeys then
+        return
+    end
     if bone.parent then
         bone.appliedTransform = mat3.multiply(mat3.multiply(bone.transform,bone.baseTransform),bone.parent.appliedTransform)
         world.debugLine(absolute(transformedCenter(bone)),absolute(transformedCenter(bone.parent)),bone.debugColour)
@@ -256,8 +300,7 @@ function performIK(bone,targetPos)
     local Aa,Ba = inversekinematics.solveAngles(relTargetPos,base.center,ikData.firstLength,ikData.secondLength,ikData.useAltSolution)
     
     if isNaN(Aa) or isNaN(Ba) then
-        -- revert and do nothing
-        base.transform = lastBaseTransform
+        -- do nothing
     else
         -- reset the other bones so they can be retransformed
         base.transform = base.defaultTransform

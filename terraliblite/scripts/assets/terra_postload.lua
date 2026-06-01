@@ -16,4 +16,5 @@ structures.allBlockTemplates = jarray()
 for k,v in next, templates do
   table.insert(structures.allBlockTemplates,k)
 end
+assets.erase("/terra_structures.config")
 assets.add("/terra_structures.config", structures)

@@ -74,11 +74,32 @@ function mat3.transform(p,m)
         p[1]*m[4]+p[2]*m[5]+m[6]
     }
 end
+function mat3.transformPoly(p,m)
+    local o = {}
+    for k,v in next, p do
+        o[k] = mat3.transform(v,m)
+    end
+    return o
+end
 -- equivalent to mat3.transform with an input of {0,0}
 function mat3.translation(m)
     return {
         m[3],
         m[6]
+    }
+end
+function mat3.scaling(m)
+    return {
+        m[1],
+        m[5]
+    }
+end
+
+-- extracts scale component 
+function mat3.baseScaling(m)
+    return {
+        math.sqrt(m[1]*m[1]+m[4]*m[4]),
+        math.sqrt(m[5]*m[5]+m[2]*m[2])
     }
 end
 -- note: not a true matrix inversion
@@ -95,7 +116,26 @@ end
 function mat3.angle(m)
     return math.atan(m[4],m[1])
 end
+function mat3.angleMatrix(m)
+    local mag = math.sqrt(m[1]*m[1]+m[4]*m[4])
+    local cos = m[1]/mag
+    local sin = m[4]/mag
+    return {
+        cos,-sin,0,
+        sin,cos, 0,
+        0, 0,     1
+    }
+end
+
 -- exports a mat3 to something for animator.transformTransformationGroup
 function mat3.export(i)
     return i[1],i[2],i[4],i[5],i[3],i[6]
+end
+-- exports a mat3 to something for drawable transformation
+function mat3.exportJson(i)
+    return {
+        {i[1],i[2],i[3]},
+        {i[4],i[5],i[6]},
+        {i[7],i[8],i[9]}
+    }
 end

@@ -2,6 +2,33 @@
  
 renderutil = {}
 
+-- every vanilla colour by name
+renderutil.colours = {
+    red =           {255, 73,  66,  255},
+    orange =        {255, 180, 47,  255},
+    yellow =        {255, 239, 30,  255},
+    green =         {79,  230, 70,  255},
+    blue =          {38,  96,  255, 255},
+    indigo =        {75,  0,   130, 255},
+    violet =        {160, 119, 255, 255},
+    black =         {0,   0,   0,   255},
+    white =         {255, 255, 255, 255},
+    magenta =       {221, 92,  249, 255},
+    darkmagenta =   {142, 33,  144, 255},
+    cyan =          {0,   220, 233, 255},
+    darkcyan =      {0,   137, 165, 255},
+    cornflowerblue= {100, 149, 237, 255},
+    gray =          {160, 160, 160, 255},
+    lightgray =     {192, 192, 192, 255},
+    darkgray =      {128, 128, 128, 255},
+    darkgreen =     {0,   128, 0,   255},
+    pink =          {255, 162, 187, 255},
+    clear =         {0,   0,   0,   0}
+}
+function renderutil.namedColour(n)
+    return renderutil.colours[string.lower(n)]
+end
+
 function renderutil.scanColours(p)
     if root.assetImage then
         -- requires OpenStarbound, scans every pixel
