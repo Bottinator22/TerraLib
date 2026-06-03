@@ -295,7 +295,7 @@ function structureObj.prepareBlock(structure, block, background, blocks)
         end
         local matchValid = matchAll
         if matchList then
-            for k,v in next, m.matchAllPoints do
+            for k,v in next, matchList do
                 local rule = rules[v[2]]
                 local ruleValid = matchAll
                 for k,e in next, rule.entries do
