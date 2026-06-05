@@ -2,8 +2,15 @@
 -- it does nothing else
 local stagehandID = nil
 function init()
-    script.setUpdateDelta(60)
+    local stagehandConfig = root.assetJson("/stagehands/terra_biomespread.stagehand")
+    if #stagehandConfig.biomes > 0 then
+        script.setUpdateDelta(60)    
+    else
+        script.setUpdateDelta(0) -- don't update. this also doesn't allow one to be spawned
+    end
 end
+
+-- TODO: it doesn't spawn the stagehand anymore if there are no biomes to spread. check if the server has TerraLib through other means (briefly spawned punchy, maybe)
 local terralibCheckPromise
 local terralibCheckDone = false
 local terralibVerified = false
@@ -16,7 +23,7 @@ function update(dt)
             end
         end
         if not stagehandID then
-            world.spawnStagehand(world.entityPosition(player.id()), "terra_biomemanager", {spawner=player.id()})
+            world.spawnStagehand(world.entityPosition(player.id()), "terra_biomemanager", {spawner=player.id()}) -- TODO: this doesn't check if one is already spawned, and will spawn multiple if ping is high
         end
     elseif not world.entityExists(stagehandID) then
         stagehandID = nil

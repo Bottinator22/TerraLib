@@ -196,7 +196,7 @@ function update(dt)
             local players = world.players()
             for k,v in next, players do
                 if world.magnitude(stagehand.position(), world.entityPosition(v)) < 300 then
-                    world.sendEntityMessage(spawner, "terraMusic", {id=biomeName..entity.id(),file=biome.music, undergroundFile=biome.undergroundMusic,nightFile=biome.nightMusic,expireType="duration",expireTime=1000,priority=biome.musicPriority, dt=dt})
+                    world.sendEntityMessage(spawner, "terraMusic", {id=biomeName..entity.id(),file=biome.music, undergroundFile=biome.undergroundMusic,nightFile=biome.nightMusic,expireType="duration",expireTime=60,priority=biome.musicPriority, dt=dt})
                 end
             end
         end
