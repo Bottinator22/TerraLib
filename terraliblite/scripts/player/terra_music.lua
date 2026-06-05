@@ -8,13 +8,17 @@ local music = {}
 --     id=any string or number, overwrites any existing music instance with the same id,
 --     paths="music file path", (can be array)
 --     (optional) undergroundPaths=paths but only applies underground,
---     nightPaths=paths but only applies at night,
+--     (optional) nightPaths=paths but only applies at night,
 --     (optional) entityId=entity ID to tie music to,
 --     (optional) entityDis=distance to entity for expiration,
 --     (optional) expireTime=seconds before expiration,
+--     (optional) fadeTime=seconds to fade in or out,
 --     priority=priority
 -- }
+-- default priority is 0
 -- priority in Terraria Mod has 10-20 for boss music and 5 for evil biome music
+-- priority in Almandine has 0 for background music
+-- TerraLib music stagehand has a default priority of 1
 local playing = nil
 function idKey(id)
     if type(id) == "string" then
@@ -23,19 +27,32 @@ function idKey(id)
         return string.format("e_%d",id)
     end
 end
--- File for managing music requests; meant to prevent music conflicts.
+-- Script for managing music requests; meant to prevent music conflicts.
 function init()
     message.setHandler("terraMusic", function (_,_,newmusic) 
         local key = idKey(newmusic.id)
         local old = music[key]
-        newmusic.priority = newmusic.priority or 0
-        newmusic.key = key
-        music[key] = newmusic
+        if newmusic.stop or not (newmusic.file or newmusic.paths) then
+            -- stop playing
+            music[key] = nil
+        elseif old then
+            for k,v in next, newmusic do
+                old[k] = v
+            end
+        else
+            newmusic.priority = newmusic.priority or 0
+            newmusic.key = key
+            music[key] = newmusic
+        end
+    end)
+    message.setHandler("/terraDebugMusic", function (_,l)
+        if not l then return "Unauthorized" end
+        return string.format("Currently playing: %s\nCurrently active: %s",playing and sb.printJson(playing,1) or "nil",sb.printJson(music,1))
     end)
     script.setUpdateDelta(1)
 
     -- why make a new script just to do this when I can just add it to an existing one?
-    -- TODO: remove the need for this. the proxy is stabler and works better with puppeteer.
+    -- TODO: remove the need for this metatable smuggle. the proxy is stabler and works better with puppeteer.
     getmetatable''.player = player
     
     -- proxies! better 
@@ -44,14 +61,22 @@ function init()
     terra_proxy.setupReceiveMessages("celestial",celestial)
 end
 function update(dt)
-    local newMusic = {}
-    local highestPriority
+    -- can't message an entity on uninit or init, so stop it here on first update
+    local stopPlaying = player.getProperty("terra_stopPlaying")
+    if stopPlaying then
+        player.setProperty("terra_stopPlaying")
+        world.sendEntityMessage(player.id(), "stopAltMusic", 0.0)
+    end
+    local lastPlaying = playing
+    local mePos = world.entityPosition(player.id())
+    if playing and not music[playing.key] then
+        playing = nil
+    end
     for k,v in next, music do
         local alive = true
-        local mePos = world.entityPosition(player.id())
         if v.expireTime then
             v.expireTime = v.expireTime - dt
-            if v.expireTime >= 0 then
+            if v.expireTime < 0 then
                 alive = false
             end
         end
@@ -77,20 +102,12 @@ function update(dt)
             end
         end
         if alive then
-            if not highestPriority or v.priority > highestPriority.priority then
-                highestPriority = v
+            if not playing or v.priority > playing.priority then
+                playing = v
             end
-            table.insert(newMusic,v)
+        else
+            music[k] = nil
         end
-    end
-    music = newMusic
-    if highestPriority then
-        playing = highestPriority
-    else
-        if playing then
-            world.sendEntityMessage(player.id(), "stopAltMusic", 2.0)
-        end
-        playing = nil
     end
     if playing then
         local m = playing
@@ -108,6 +125,20 @@ function update(dt)
         if type(paths) == "string" then
             paths = {paths}
         end
-        world.sendEntityMessage(player.id(), "playAltMusic", paths, 2.0)
+        local fadeTime = playing.fadeTime or 2.0
+        if lastPlaying then
+            local oldFadeTime = lastPlaying.fadeTime or 2.0
+            fadeTime = (fadeTime + oldFadeTime)/2
+        end
+        world.sendEntityMessage(player.id(), "playAltMusic", paths, fadeTime)
+    elseif lastPlaying then
+        world.sendEntityMessage(player.id(), "stopAltMusic", lastPlaying.fadeTime or 2.0)
+    end
+end
+
+function uninit()
+    -- queue a stop alt music after warp (alt music isn't cleared between warps)
+    if playing then
+        player.setProperty("terra_stopPlaying",true)
     end
 end

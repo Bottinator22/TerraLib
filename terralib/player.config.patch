@@ -1,4 +1,4 @@
 [
-{ "op" : "add", "path" : "/genericScriptContexts/terraStagehands", "value" : "/scripts/player/terra_stagehands.lua" },
+{ "op" : "add", "path" : "/genericScriptContexts/terraBiomes", "value" : "/scripts/player/terra_biomes.lua" },
 { "op" : "add", "path" : "/deploymentConfig/scripts/-", "value" : "/scripts/player/terra_floatingitems.lua" }
 ]

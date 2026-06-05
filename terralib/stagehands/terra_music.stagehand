@@ -1,0 +1,8 @@
+{
+  "type" : "terra_music",
+
+  "scripts" : [
+  	"/stagehands/terra_music.lua"
+  ],
+  "scriptDelta" : 1
+} 

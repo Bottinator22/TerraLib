@@ -1,9 +1,10 @@
 require "/scripts/vec2.lua"
 require "/scripts/poly.lua"
 
--- todo: rework this ENTIRELY
+-- TODO: rework this ENTIRELY
 -- to possibly be a bit more... global
 -- (track biome spreading by the sector)
+-- also use a world server script instead of a stagehand on oSB
 
 local spreadTypes = {
     material={},
@@ -24,7 +25,7 @@ function table.find(org, findValue)
     return nil
 end
 function init()
-    biomes = config.getParameter("biomes")
+    biomes = root.assetJson("/terra_biomes.json")
     -- compile all blocks that spread into a single array, so spreading is cheaper with lots of spreadable blocks
     for k,biome in next, biomes do
         for k,v in next, biome.spreadTypes.material do
@@ -48,7 +49,7 @@ function update(dt)
     stagehand.setPosition(world.entityPosition(spawner))
 
     -- Do nothing if there are no biomes defined
-    if #biomes == 0 then
+    if not next(biomes) then
         return
     end
 
@@ -189,14 +190,6 @@ function update(dt)
                             end
                         end
                     end
-                end
-            end
-        end
-        if biome.music and musicCount > biome.musicBlocks then
-            local players = world.players()
-            for k,v in next, players do
-                if world.magnitude(stagehand.position(), world.entityPosition(v)) < 300 then
-                    world.sendEntityMessage(spawner, "terraMusic", {id=biomeName..entity.id(),file=biome.music, undergroundFile=biome.undergroundMusic,nightFile=biome.nightMusic,expireType="duration",expireTime=60,priority=biome.musicPriority, dt=dt})
                 end
             end
         end
