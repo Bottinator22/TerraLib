@@ -60,7 +60,7 @@ end
 function terra_proxy.setupReceiveMessages(name,t)
     doCleanup()
     local f = string.format("%s.%%s",name)
-    local msgs = {string.format(f,"terra_proxy_mode"),string.format(f,"terra_proxy_msgs"),string.format(f,"terra_proxy_keys")}
+    local msgs = {string.format(f,"terra_proxy_mode"),string.format(f,"terra_proxy_msgs"),string.format(f,"terra_proxy_keys"),string.format(f,"terra_proxy_exists")}
     local keys
     message.setHandler(msgs[1],function(_,isLocal,...)
         if not isLocal then return end
@@ -73,6 +73,10 @@ function terra_proxy.setupReceiveMessages(name,t)
     message.setHandler(msgs[3],function(_,isLocal,...)
         if not isLocal then return end
         return keys
+    end)
+    message.setHandler(msgs[4],function(_,isLocal,k)
+        if not isLocal then return end
+        return not not t[k]
     end)
     keys = iterateMessages(name,t,f,msgs)
     local function actuallyCleanup()
@@ -95,12 +99,18 @@ end
 function terra_proxy.setupReceiveCalls(name)
     doCleanup()
     local msg = string.format("%s.terra_proxy_mode",name)
+    local msg2 = string.format("%s.terra_proxy_exists",name)
     message.setHandler(msg,function(_,isLocal,...)
         if not isLocal then return end
         return "calls"
     end)
+    message.setHandler(msgs2,function(_,isLocal,k)
+        if not isLocal then return end
+        return not not t[k]
+    end)
     local function actuallyCleanup()
         message.setHandler(msg,nil)
+        message.setHandler(msg2,nil)
     end
     return function(later)
         if later then
@@ -141,11 +151,15 @@ function terra_proxy.setupProxy(name,entityId,throw)
     end
     local keys = world.sendEntityMessage(entityId,string.format(fmt,"terra_proxy_keys")):result()
     setmetatable(proxy,{__index=function(t,k)
-        local func = builder(string.format(fmt,k))
-        t[k] = func
-        return func
+        if world.sendEntityMessage(entityId,string.format(fmt,"terra_proxy_exists"),k):result() then
+            local func = builder(string.format(fmt,k))
+            t[k] = func
+            return func
+        else
+            t[k] = nil
+        end
     end,terra_keys=keys})
-    -- actually, define all existent keys for iteration
+    -- define all existent keys for iteration
     local n
     for _,k in next, keys do
         n = proxy[k]

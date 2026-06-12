@@ -1,5 +1,5 @@
 require "/scripts/rect.lua"
-local lastUsed
+local usedTimer = 1
 local region
 local poly
 function init()
@@ -13,7 +13,8 @@ function init()
 end
 function update(dt)
     world.debugPoly(poly,"red")
-    if os.clock()-lastUsed > 1 then
+    usedTimer = usedTimer - dt
+    if usedTimer < 0 then
         vehicle.destroy()
         return
     end
@@ -21,7 +22,7 @@ end
 function sd_isLoaderOf(r)
     local valid = r[1] >= region[1] and r[2] >= region[2] and r[3] <= region[3] and r[4] <= region[4]
     if valid then
-        lastUsed = os.clock()
+        usedTimer = 1
     end
     return valid
 end
