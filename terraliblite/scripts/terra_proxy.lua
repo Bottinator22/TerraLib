@@ -5,8 +5,61 @@
 -- TODO: clean this up. keys are transferred, which kinda defeats the point of the whole metatable thing on proxies.
 
 -- TODO: fix pcall with proxies. if an error is thrown it will error the proxy, not the calling script.
+
+-- TODO: the current userdata handling system only works for engine userdatas; anything userdata-like won't work. so anything trying to pretend to be a userdata won't work
+-- TODO: also won't work when layering proxies on proxies
+
 terra_proxy = {}
 local cleanupRequests = {}
+local userdataSentProxies = {}
+local userdataReceivedProxies = {}
+local userdataReceivedProxies_uuids = {}
+
+setmetatable(userdataReceivedProxies,{__mode="v"})
+
+local function makeUserdataProxy(ud,callMsg,delMsg,existsMsg)
+    local uuid = sb.makeUuid()
+    local obj = {userdata=ud}
+    local out = {terra_proxy_special=true,terra_proxy_id=uuid,terra_proxy_callMsg=callMsg,terra_proxy_delMsg=delMsg,terra_proxy_existsMsg=existsMsg}
+    userdataSentProxies[uuid] = obj
+    return out
+end
+local lastCleaned = 0
+local function cleanUserdata()
+    if lastCleaned == world.time() then
+        return
+    end
+    lastCleaned = world.time()
+    for k,v in next, userdataReceivedProxies_uuids do
+        if not userdataReceivedProxies[k] then
+            world.sendEntityMessage(v.eid,v.msg,k)
+            userdataReceivedProxies_uuids[k] = nil
+        end
+    end
+end
+local function maybeUserdata(v,entityId)
+    if type(v) == "table" and v.terra_proxy_special then
+        local proxy = {terra_proxy_id=v.terra_proxy_id}
+        userdataReceivedProxies_uuids[v.terra_proxy_id] = {msg=v.terra_proxy_delMsg,eid=entityId}
+        userdataReceivedProxies[v.terra_proxy_id] = proxy
+        setmetatable(proxy,{__index=function(t,k)
+            if world.sendEntityMessage(entityId,v.terra_proxy_existsMsg,v.terra_proxy_id,k):result() then
+                local func = function(t,...)
+                    cleanUserdata()
+                    local p = world.sendEntityMessage(entityId,v.terra_proxy_callMsg,v.terra_proxy_id,k,...)
+                    return maybeUserdata(p:result(),entityId)
+                end
+                t[k] = func
+                return func
+            else
+                t[k] = nil
+            end
+        end})
+        return proxy
+    else
+        return v
+    end
+end
 -- senders
 -- both of these functions return a function that will clean up the message handlers, in case it's needed
 -- sets up the proxy for messages
@@ -39,7 +92,11 @@ local function iterateMessages(name,t,f,msgs)
             local msg = string.format(f,k)
             message.setHandler(msg,function(_,isLocal,...)
                 if not isLocal then return end
-                return v(...)
+                local out = v(...)
+                if type(out) == "userdata" then
+                    return makeUserdataProxy(out,msgs[5],msgs[6],msgs[7])
+                end
+                return out
             end)
             table.insert(msgs,msg)
         end
@@ -60,7 +117,15 @@ end
 function terra_proxy.setupReceiveMessages(name,t)
     doCleanup()
     local f = string.format("%s.%%s",name)
-    local msgs = {string.format(f,"terra_proxy_mode"),string.format(f,"terra_proxy_msgs"),string.format(f,"terra_proxy_keys"),string.format(f,"terra_proxy_exists")}
+    local msgs = {
+        string.format(f,"terra_proxy_mode"),
+        string.format(f,"terra_proxy_msgs"),
+        string.format(f,"terra_proxy_keys"),
+        string.format(f,"terra_proxy_exists"),
+        string.format(f,"terra_proxy_callUserdata"),
+        string.format(f,"terra_proxy_deleteUserdata"),
+        string.format(f,"terra_proxy_existsUserdata")
+    }
     local keys
     message.setHandler(msgs[1],function(_,isLocal,...)
         if not isLocal then return end
@@ -77,6 +142,23 @@ function terra_proxy.setupReceiveMessages(name,t)
     message.setHandler(msgs[4],function(_,isLocal,k)
         if not isLocal then return end
         return not not t[k]
+    end)
+    message.setHandler(msgs[5],function(_,isLocal,uid,f,...)
+        if not isLocal then return end
+        local ud = userdataSentProxies[uid]
+        local out = ud.userdata[f](ud.userdata,...)
+        if type(out) == "userdata" then
+            return makeUserdataProxy(out,msgs[5],msgs[6],msgs[7])
+        end
+        return out
+    end)
+    message.setHandler(msgs[6],function(_,isLocal,uid)
+        if not isLocal then return end
+        userdataSentProxies[uid] = nil
+    end)
+    message.setHandler(msgs[7],function(_,isLocal,uid,k)
+        if not isLocal then return end
+        return userdataSentProxies[uid] and not not userdataSentProxies[uid].userdata[k]
     end)
     keys = iterateMessages(name,t,f,msgs)
     local function actuallyCleanup()
@@ -141,11 +223,12 @@ function terra_proxy.setupProxy(name,entityId,throw)
     else
         builder = function(func)
             return function(...)
+                cleanUserdata()
                 local p = world.sendEntityMessage(entityId,func,...)
                 if throw and not p:succeeded() then
                     error(string.format("Proxy function %s has no message handler!",func))
                 end
-                return p:result()
+                return maybeUserdata(p:result(),entityId)
             end
         end
     end
