@@ -27,8 +27,12 @@ function idKey(id)
         return string.format("e_%d",id)
     end
 end
+
+local cfg
+
 -- Script for managing music requests; meant to prevent music conflicts.
 function init()
+    cfg = root.assetJson("/terralib_general.config").music
     message.setHandler("terraMusic", function (_,_,newmusic) 
         local key = idKey(newmusic.id)
         local old = music[key]
@@ -65,7 +69,11 @@ function update(dt)
     local stopPlaying = player.getProperty("terra_stopPlaying")
     if stopPlaying then
         player.setProperty("terra_stopPlaying")
-        world.sendEntityMessage(player.id(), "stopAltMusic", 0.0)
+        if cfg.useBlankToClear then
+            world.sendEntityMessage(player.id(), "playAltMusic", {""}, 0.0)
+        else
+            world.sendEntityMessage(player.id(), "stopAltMusic", 0.0)
+        end
     end
     local lastPlaying = playing
     local mePos = world.entityPosition(player.id())
@@ -132,7 +140,11 @@ function update(dt)
         end
         world.sendEntityMessage(player.id(), "playAltMusic", paths, fadeTime)
     elseif lastPlaying then
-        world.sendEntityMessage(player.id(), "stopAltMusic", lastPlaying.fadeTime or 2.0)
+        if cfg.useBlankToClear then
+            world.sendEntityMessage(player.id(), "playAltMusic", {""}, lastPlaying.fadeTime or 2.0)
+        else
+            world.sendEntityMessage(player.id(), "stopAltMusic", lastPlaying.fadeTime or 2.0)
+        end
     end
 end
 
