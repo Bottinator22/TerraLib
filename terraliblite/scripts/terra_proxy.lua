@@ -17,6 +17,21 @@ local userdataReceivedProxies_uuids = {}
 
 setmetatable(userdataReceivedProxies,{__mode="v"})
 
+local hookedUninit = false
+local function maybeHookUninit()
+    if not hookedUninit then
+        local oldUninit = uninit or function() end
+        uninit = function()
+            for k,v in next, userdataSentProxies do
+                if v.uninitFunc then
+                    v.userdata[v.uninitFunc](v.userdata,table.unpack(v.uninitArgs))
+                end
+            end
+            oldUninit()
+        end
+    end
+end
+
 local function makeUserdataProxy(ud,callMsg,delMsg,existsMsg)
     local uuid = sb.makeUuid()
     local obj = {userdata=ud}
@@ -146,6 +161,16 @@ function terra_proxy.setupReceiveMessages(name,t)
     message.setHandler(msgs[5],function(_,isLocal,uid,f,...)
         if not isLocal then return end
         local ud = userdataSentProxies[uid]
+        if f == "terra_setUninitFunc" then
+            maybeHookUninit()
+            local args = {...}
+            ud.uninitFunc = args[1]
+            if args[1] then
+                table.remove(args,1)
+                ud.uninitArgs = args
+            end
+            return
+        end
         local out = ud.userdata[f](ud.userdata,...)
         if type(out) == "userdata" then
             return makeUserdataProxy(out,msgs[5],msgs[6],msgs[7])
@@ -154,11 +179,21 @@ function terra_proxy.setupReceiveMessages(name,t)
     end)
     message.setHandler(msgs[6],function(_,isLocal,uid)
         if not isLocal then return end
-        userdataSentProxies[uid] = nil
+        if userdataSentProxies[uid] then
+            local ud = userdataSentProxies[uid]
+            if ud.uninitFunc then
+                ud.userdata[ud.uninitFunc](ud.userdata,table.unpack(ud.uninitArgs))
+            end
+            userdataSentProxies[uid] = nil
+        end
     end)
     message.setHandler(msgs[7],function(_,isLocal,uid,k)
         if not isLocal then return end
-        return userdataSentProxies[uid] and not not userdataSentProxies[uid].userdata[k]
+        if not userdataSentProxies[uid] then return false end
+        if k == "terra_setUninitFunc" then
+            return true
+        end
+        return not not userdataSentProxies[uid].userdata[k]
     end)
     keys = iterateMessages(name,t,f,msgs)
     local function actuallyCleanup()
