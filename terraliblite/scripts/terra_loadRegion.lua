@@ -3,10 +3,11 @@ require "/scripts/rect.lua"
 -- designed to be used like world.loadRegion, works on both client and server master
 
 function loadRegion(r)
-    if not world.entity then -- make sure this is oSB
+    --if not world.entity then -- make sure this is oSB
+        -- stagehands break normal npcs, so just use vehicles always
         require "/scripts/terra_loadRegion_vehicle.lua"
         return loadRegion(r)
-    end
+    --[[end
     if world.loadRegion then
         return world.loadRegion(r)
     else
@@ -24,5 +25,5 @@ function loadRegion(r)
         end
         world.debugPoly(poly,"yellow")
         return not world.polyCollision(poly,nil,{"Null"})
-    end
+    end]]
 end 

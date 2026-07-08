@@ -46,30 +46,10 @@
           "droneState": {
             "default" : "null",
             "states": {
-              "null": {},
-              "active": {
-                "properties": {
-                  "persistentSound": ""
-                }
-              }
+              "null": {}
             }
           }
         }
-      },
-
-      "transformationGroups" : {
-        "body" : { "interpolated" : true },
-        "flip": {"interpolated": false},
-        "rotation": {"interpolated": false}
-      },
-      "effects" : {
-      },
-      "particleEmitters" : null,
-      "lights" : {
-      },
-
-      "sounds" : {
-        "fire" : []
       }
     },
     "physicsCollisions": {

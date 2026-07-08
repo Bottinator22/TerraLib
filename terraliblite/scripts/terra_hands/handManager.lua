@@ -166,7 +166,7 @@ function createGenericHandWithScript(item, params, extraparams, script)
     local mergedConfig = sb.jsonMerge(itemConfig.config, itemConfig.parameters)
     local colourDirectives = ""
     if mergedConfig.colorIndex then
-        for k,v in next, mergedConfig.colorOptions[mergedConfig.colorIndex+1] do
+        for k,v in next, mergedConfig.colorOptions[(mergedConfig.colorIndex+1)%(#mergedConfig.colorOptions)] do
             colourDirectives=colourDirectives..string.format("?replace;%s=%s",k,v)
         end
     end

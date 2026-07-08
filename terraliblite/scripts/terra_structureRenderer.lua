@@ -170,17 +170,18 @@ function structureObj.calcBoundBox(structure,center,tilesPerResume)
     return coroutine.create(function()
         local bb = {math.huge,math.huge,-math.huge,-math.huge}
         if center then
-            bb = {center[1],center[2],center[1],center[2]}
+            bb = {0,0,0,0}
         end
         local iterating = structure.background or structure.foreground
         local onFG = not structure.background
         local k,v = next(iterating)
         while k do
             for i=1,tilesPerResume do
-                bb[1] = math.min(bb[1],v.pos[1])
-                bb[2] = math.min(bb[2],v.pos[2])
-                bb[3] = math.max(bb[3],v.pos[1]+1)
-                bb[4] = math.max(bb[4],v.pos[2]+1)
+                local rpos = world.distance(v.pos,center or {0,0})
+                bb[1] = math.min(bb[1],rpos[1])
+                bb[2] = math.min(bb[2],rpos[2])
+                bb[3] = math.max(bb[3],rpos[1]+1)
+                bb[4] = math.max(bb[4],rpos[2]+1)
                 
                 k,v = next(iterating,k)
                 if not k then
@@ -318,9 +319,11 @@ function structureObj.prepareBlock(structure, block, background, blocks)
                     if noMatch then -- only present for shadows so
                         valid = false
                     else
-                        local tile = matchFrom[blockKey(block.pos[1]+v[1][1],block.pos[2]+v[1][2])]
+                        local tx = block.pos[1]+v[1][1]
+                        local ty = block.pos[2]+v[1][2]
+                        local tile = matchFrom[blockKey(world.xwrap(tx),ty)]
                         if structure.linkToWorld and not tile then
-                            local worldPos = vec2.add(structure.pos,{block.pos[1]+v[1][1],block.pos[2]+v[1][2]})
+                            local worldPos = vec2.add(structure.pos,{tx,ty})
                             valid = matchFuncs[e.type](e,block,world.material(worldPos,matLayer),world.materialHueShift(worldPos,matLayer))
                         elseif tile then
                             valid = matchFuncs[e.type](e,block,tile.block,tile.hueshift)

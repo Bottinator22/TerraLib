@@ -235,6 +235,7 @@ function init()
     if p == "" then
       out = sb.jsonMerge({}, itemParameters)
     else
+      -- TODO: properly handle paths
       out = itemParameters[p] or d
       if type(out) == "table" then
         return sb.jsonMerge({}, out)
