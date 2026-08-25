@@ -5,9 +5,6 @@ local identity = {
     0,0,1
 }
 local zeroVec = {0,0}
-local function dot3(a,b,c,d,e,f)
-    return a*b+c*d+e*f
-end
 mat3 = {}
 function mat3.identity()
     return {
@@ -24,6 +21,17 @@ function mat3.getRotationMatrix(r,p)
         cos, -sin,p[1]-p[1]*cos+sin*p[2],
         sin, cos, p[2]-p[1]*sin-cos*p[2],
         0, 0, 1
+    }
+end
+function mat3.getRotationMatrix_dirVec(v,p)
+    -- assumes v is a unit vector representing the given direction. saves some trig calculations.
+    p = p or zeroVec
+    local cos = v[1]
+    local sin = v[2]
+    return {
+        cos, -sin,p[1]-p[1]*cos+sin*p[2],
+        sin, cos, p[2]-p[1]*sin-cos*p[2],
+        0, 0,     1
     }
 end
 function mat3.getTranslationMatrix(t)
@@ -50,22 +58,79 @@ function mat3.getScalingMatrix(sot,p)
     end
 end
 function mat3.translate(m,t)
+    -- faster version that does all calculations at once
+    return {
+        m[1]+t[1]*m[7],m[2]+t[1]*m[8],m[3]+t[1]*m[9],
+        m[4]+t[2]*m[7],m[5]+t[2]*m[8],m[6]+t[2]*m[9],
+        m[7],          m[8],          m[9]
+    }
+end
+--[[
+function mat3.translate(m,t)
     local n = mat3.getTranslationMatrix(t)
     return mat3.multiply(m,n)
+end]]
+function mat3.scale(m,sot,p)
+    -- faster version that does all calculations at once
+    p = p or zeroVec
+    if type(sot) == "number" then
+        return {
+            sot*m[1]+(p[1]-p[1]*sot)*m[7], sot*m[2]+(p[1]-p[1]*sot)*m[8], sot*m[3]+(p[1]-p[1]*sot)*m[9],
+            sot*m[4]+(p[2]-p[2]*sot)*m[7], sot*m[5]+(p[2]-p[2]*sot)*m[8], sot*m[6]+(p[2]-p[2]*sot)*m[9],
+            m[7], m[8], m[9]
+        }
+    else
+        return {
+            sot[1]*m[1]+(p[1]-p[1]*sot[1])*m[7], sot[1]*m[2]+(p[1]-p[1]*sot[1])*m[8], sot[1]*m[3]+(p[1]-p[1]*sot[1])*m[9],
+            sot[2]*m[4]+(p[2]-p[2]*sot[2])*m[7], sot[2]*m[5]+(p[2]-p[2]*sot[2])*m[8], sot[2]*m[6]+(p[2]-p[2]*sot[2])*m[9],
+            m[7], m[8], m[9]
+        }
+    end
 end
+--[[
 function mat3.scale(m,sot,p)
     local n = mat3.getScalingMatrix(sot,p)
     return mat3.multiply(m,n)
 end
+]]
+-- TODO: 'fast' versions of these that do all the operations at once
+function mat3.rotate(m,r,p)
+    p = p or zeroVec
+    local sin = math.sin(r)
+    local cos = math.cos(r)
+    return {
+        cos*m[1]-sin*m[4]+(p[1]-p[1]*cos+sin*p[2])*m[7], cos*m[2]-sin*m[5]+(p[1]-p[1]*cos+sin*p[2])*m[8], cos*m[3]-sin*m[6]+(p[1]-p[1]*cos+sin*p[2])*m[9],
+        sin*m[1]+cos*m[4]+(p[2]-p[1]*sin-cos*p[2])*m[7], sin*m[2]+cos*m[5]+(p[2]-p[1]*sin-cos*p[2])*m[8], sin*m[3]+cos*m[6]+(p[2]-p[1]*sin-cos*p[2])*m[9],
+        m[7], m[8], m[9]
+    }
+end
+--[[
 function mat3.rotate(m,r,p)
     local n = mat3.getRotationMatrix(r,p)
     return mat3.multiply(m,n)
-end
-function mat3.multiply(b,a)
+end]]
+function mat3.rotate_dirVec(m,v,p)
+    -- assumes v is a unit vector representing the given direction. saves some trig calculations.
+    p = p or zeroVec
+    local cos = v[1]
+    local sin = v[2]
     return {
-        dot3(a[1],b[1],a[2],b[4],a[3],b[7]),dot3(a[1],b[2],a[2],b[5],a[3],b[8]),dot3(a[1],b[3],a[2],b[6],a[3],b[9]),
-        dot3(a[4],b[1],a[5],b[4],a[6],b[7]),dot3(a[4],b[2],a[5],b[5],a[6],b[8]),dot3(a[4],b[3],a[5],b[6],a[6],b[9]),
-        dot3(a[7],b[1],a[8],b[4],a[9],b[7]),dot3(a[7],b[2],a[8],b[5],a[9],b[8]),dot3(a[7],b[3],a[8],b[6],a[9],b[9])
+        cos*m[1]-sin*m[4]+(p[1]-p[1]*cos+sin*p[2])*m[7], cos*m[2]-sin*m[5]+(p[1]-p[1]*cos+sin*p[2])*m[8], cos*m[3]-sin*m[6]+(p[1]-p[1]*cos+sin*p[2])*m[9],
+        sin*m[1]+cos*m[4]+(p[2]-p[1]*sin-cos*p[2])*m[7], sin*m[2]+cos*m[5]+(p[2]-p[1]*sin-cos*p[2])*m[8], sin*m[3]+cos*m[6]+(p[2]-p[1]*sin-cos*p[2])*m[9],
+        m[7], m[8], m[9]
+    }
+end
+--[[
+function mat3.rotate_dirVec(m,v,p)
+    -- assumes v is a unit vector representing the given direction. saves some trig calculations.
+    local n = mat3.getRotationMatrix_dirVec(v,p)
+    return mat3.multiply(m,n)
+end]]
+function mat3.multiply(a,b)
+    return {
+        b[1]*a[1]+b[2]*a[4]+b[3]*a[7], b[1]*a[2]+b[2]*a[5]+b[3]*a[8], b[1]*a[3]+b[2]*a[6]+b[3]*a[9],
+        b[4]*a[1]+b[5]*a[4]+b[6]*a[7], b[4]*a[2]+b[5]*a[5]+b[6]*a[8], b[4]*a[3]+b[5]*a[6]+b[6]*a[9],
+        b[7]*a[1]+b[8]*a[4]+b[9]*a[7], b[7]*a[2]+b[8]*a[5]+b[9]*a[8], b[7]*a[3]+b[8]*a[6]+b[9]*a[9]
     }
 end
 function mat3.transform(p,m)

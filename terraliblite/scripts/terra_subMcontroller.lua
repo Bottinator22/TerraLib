@@ -23,9 +23,7 @@ function buildSubMcontroller(mcontroller,pControlFuncs, pExcludedFuncs)
         "controlFly",
         "controlFace"
     }
-    local excludedFuncs = pExcludedFuncs or {
-        "controlFace"
-    }
+    local excludedFuncs = pExcludedFuncs or {}
     -- builds an mcontroller table that properly handles controls
     local outT = {}
     setmetatable(outT, {__index=mcontroller})

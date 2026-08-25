@@ -42,6 +42,9 @@ function initAnimation()
         animationsConfig[k] = v
     end
     for k,v in next, animationsConfig do
+        -- some pre-processing
+    end
+    for k,v in next, animationsConfig do
         processParenting(v)
     end
 end
@@ -89,15 +92,7 @@ function stanceAnimator.setAnimation(self,a,f)
             else
                 self.currentAnimation = animationsConfig[a]
             end
-            if self.currentAnimation.sounds and self.sounds then
-                playAnimationSound(self.currentAnimation.sounds[1])
-            end
-            if self.currentAnimation.animStates then
-                local s = self.currentAnimation.animStates[1]
-                if s then
-                    animator.setAnimationState(s[1],s[2])
-                end
-            end
+            self:runFrameEvents(self.currentAnimation,1)
         else
             self.currentAnimation = nil
         end
@@ -109,6 +104,23 @@ function stanceAnimator.setAnimation(self,a,f)
 end
 function stanceAnimator.getDebug(self)
     return self.currentAnimation and self.currentAnimation.name or "nil"
+end
+function stanceAnimator.runFrameEvents(self,anim,frame)
+    if anim.calls then
+        local s = anim.calls[frame]
+        for _,v in next, s do
+            _ENV[v.func](table.unpack(v.args or {}))
+        end
+    end
+    if anim.sounds and self.sounds then
+        playAnimationSound(anim.sounds[frame])
+    end
+    if anim.animStates then
+        local s = anim.animStates[frame]
+        if s then
+            animator.setAnimationState(s[1],s[2])
+        end
+    end
 end
 function stanceAnimator.updateAnimation(self,dt)
     if not self.currentAnimation then
@@ -154,15 +166,7 @@ function stanceAnimator.updateAnimation(self,dt)
         if self.animationTimer > self.currentAnimation.frameTime then
             self.animationTimer = self.animationTimer - self.currentAnimation.frameTime
             self.animationFrame = nextFrame
-            if self.currentAnimation.sounds and self.sounds then
-                playAnimationSound(self.currentAnimation.sounds[self.animationFrame])
-            end
-            if self.currentAnimation.animStates then
-                local s = self.currentAnimation.animStates[self.animationFrame]
-                if s then
-                    animator.setAnimationState(s[1],s[2])
-                end
-            end
+            self:runFrameEvents(self.currentAnimation,self.animationFrame)
             nextFrame = self.animationFrame + 1
             if nextFrame > #self.currentAnimation.stances then
                 if self.currentAnimation.loop then
@@ -183,15 +187,7 @@ function stanceAnimator.updateAnimation(self,dt)
                     nextFrame = self.animationFrame
                 end
             end
-            if self.currentAnimation.sounds and self.sounds then
-                playAnimationSound(self.currentAnimation.sounds[nextFrame])
-            end
-            if self.currentAnimation.animStates then
-                local s = self.currentAnimation.animStates[nextFrame]
-                if s then
-                    animator.setAnimationState(s[1],s[2])
-                end
-            end
+            self:runFrameEvents(self.currentAnimation,nextFrame)
         end
         local perc = self.animationTimer/self.currentAnimation.frameTime
         self.stance = stanceInterpolated(

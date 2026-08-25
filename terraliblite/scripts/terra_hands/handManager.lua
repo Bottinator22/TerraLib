@@ -103,7 +103,7 @@ function createActiveItemHand(item, params, extraparams)
         mParams.renderLayer = extraparams.oneHandedRenderLayer
     end
     handMcontrollerId = handMcontrollerId + 1
-    local myMcontroller = buildSubMcontroller(mcontrollerToUse)
+    local myMcontroller = buildSubMcontroller(mcontrollerToUse,nil,{"controlFace"})
     local mcname = string.format("tai_mcontroller_%d",handMcontrollerId)
     local cleanup = terra_proxy.setupReceiveMessages(mcname, myMcontroller.table)
     mParams.mcontrollerName = mcname
