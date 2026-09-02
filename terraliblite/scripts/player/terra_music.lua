@@ -1,6 +1,7 @@
 require "/scripts/terra_proxy.lua"
 require "/scripts/terra_vec2ref.lua"
 require "/scripts/rect.lua"
+require "/scripts/poly.lua"
 
 local music = {}
 -- table format:
@@ -9,10 +10,19 @@ local music = {}
 --     paths="music file path", (can be array)
 --     (optional) undergroundPaths=paths but only applies underground,
 --     (optional) nightPaths=paths but only applies at night,
---     (optional) entityId=entity ID to tie music to,
---     (optional) entityDis=distance to entity for expiration,
+
 --     (optional) expireTime=seconds before expiration,
 --     (optional) fadeTime=seconds to fade in or out,
+
+--     (optional) entityId=entity ID to tie music to,
+--     (optional) entityDis=distance to entity for expiration,
+
+--     (optional) dis=distance to expire at
+--                      disPos=position to check dis against
+
+--     (optional) rect=rect to tie music to, expires if player leaves this area
+
+--     (optional) poly=poly to tie music to, expires if player leaves this poly
 --     priority=priority
 -- }
 -- default priority is 0
@@ -29,6 +39,17 @@ function idKey(id)
 end
 
 local cfg
+
+local debug = false
+local function makeCirclePoly(radius, p)
+    local output = {}
+    local points = 10
+    for i = 1, points, 1 do
+        local angle = (math.pi * 2) / points * i
+        table.insert(output, vec2.add(vec2.withAngle(angle, radius), p))
+    end
+    return output
+end
 
 -- Script for managing music requests; meant to prevent music conflicts.
 function init()
@@ -50,6 +71,10 @@ function init()
         end
     end)
     message.setHandler("/terraDebugMusic", function (_,l)
+        if not l then return "Unauthorized" end
+        debug = not debug
+    end)
+    message.setHandler("/terraDumpMusic", function (_,l)
         if not l then return "Unauthorized" end
         return string.format("Currently playing: %s\nCurrently active: %s",playing and sb.printJson(playing,1) or "nil",sb.printJson(music,1))
     end)
@@ -80,6 +105,7 @@ function update(dt)
     if playing and not music[playing.key] then
         playing = nil
     end
+    local po = {0,-1000}
     for k,v in next, music do
         local alive = true
         if v.expireTime then
@@ -100,11 +126,40 @@ function update(dt)
             end
         end
         if v.rect then
+            if debug then
+                world.debugPoly({{v.rect[1],v.rect[2]},{v.rect[3],v.rect[2]},{v.rect[3],v.rect[4]},{v.rect[1],v.rect[4]}},"cyan")
+            end
             if not rect.contains(v.rect, mePos) then
                 alive = false
             end
         end
+        if v.poly then
+            if debug then
+                world.debugPoly(v.poly,"cyan")
+            end
+            -- check if within the poly
+            -- make poly relative
+            local cpol = {}
+            for k,v in next, v.poly do
+                cpol[k] = world.distance(v,mePos)
+            end
+            --world.debugPoly(cpol,"red")
+            local withinI = 0
+            for i=1,#cpol do
+                local ca = cpol[i]
+                local cb = cpol[i+1] or cpol[1]
+                if vec2.intersect({0,0},po,ca,cb) then
+                    withinI = withinI + 1
+                end
+            end
+            if withinI & 1 == 0 then -- if it crossed an odd number of lines this means we are inside the poly
+                alive = false
+            end
+        end
         if v.dis then
+            if debug then
+                world.debugPoly(makeCirclePoly(v.dis,v.disPos),"cyan")
+            end
             if world.magnitude(v.disPos, mePos) > v.dis then
                 alive = false
             end
